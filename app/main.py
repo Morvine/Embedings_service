@@ -14,13 +14,14 @@ from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 
 from app.logic.create_emb import create_text, build_index
-from app.logic.retrieve_utils import retrieve
+from app.logic.retrieve_utils import retrieve, retrieve_all
 
 
 load_dotenv()
 
 
 model_path = f"{os.getenv('MODELS_PATH', '/volumes/ml_models')}/{os.getenv('MODEL_NAME', 'e5-large-en-ru')}"
+db_all_path = f"{os.getenv('DB_ALL_PATH', '/volumes/ml_models')}/{os.getenv('DB_ALL', 'db_full_cpu.pickle')}"
 model = SentenceTransformer(model_path)
 
 app = FastAPI()
@@ -38,6 +39,11 @@ CHUNK_SIZE = eval(os.getenv('CHUNK_SIZE', 400))
 CHUNK_OVERLAP = eval(os.getenv('CHUNK_SIZE', 45))
 E5_FLAG = eval(os.getenv('E5_FLAG', True))
 ADD_SPEAKER = eval(os.getenv('ADD_SPEAKER', True))
+DB_ALL_FLAG = eval(os.getenv('DB_ALL_FLAG', True))
+
+if DB_ALL_FLAG:
+    with open(db_all_path, 'rb') as f:
+        db_all = pickle.load(f)
 
 @app.post("/create_embeddings")
 def create_embeddings(data=Body()):
@@ -113,6 +119,38 @@ def retrieve_docs(data=Body()):
     return JSONResponse(
         status_code=status.HTTP_404_NOT_FOUND,
         content={"message": "Отсутствует результат декодирования"})
+
+@app.post("/retrieve_all_docs")
+def retrieve_all_docs(data=Body()):
+    if not DB_ALL_FLAG:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"message": "Файл не найден"})
+
+    minio_path = data['file_path']
+    question = data['question']
+    base_path = os.path.dirname(minio_path)
+
+
+    retrieved_docs = retrieve_all(model, question, db_all, k_documents=8, e5_flag=E5_FLAG, beta=0.3, alpha=0.1, k_first=8)
+    result = {'data': retrieved_docs}
+
+    if result is not None and result['data']:
+        value_as_bytes = str(result).encode('utf-8')
+        res_filename = f'{base_path}/' + str(hashlib.md5(value_as_bytes).hexdigest()) + '.json'
+
+        res_data = io.BytesIO(value_as_bytes)
+
+        client.put_object(bucket_name=MINIO_BUCKET, object_name=f'{res_filename}', data=res_data,
+                          length=len(value_as_bytes))
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={'result': res_filename})
+
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND,
+        content={"message": "Отсутствует результат декодирования"})
+
 
 
 

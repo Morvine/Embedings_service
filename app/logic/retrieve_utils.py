@@ -38,7 +38,6 @@ def calc_lcs(question, data, beta=1.5):
 
 
 def retrieve(EMBEDDER, question, db, k_documents=8, k_first=None, e5_flag=False, beta=1.5, alpha=0.1):
-    retrieved_docs = ""
     if e5_flag:
         query_embedding = EMBEDDER.encode(question, convert_to_tensor=True, normalize_embeddings=True)
     else:
@@ -59,4 +58,33 @@ def retrieve(EMBEDDER, question, db, k_documents=8, k_first=None, e5_flag=False,
     else:
         top_k_documents = [db["docs"][idx] for idx in top_k_idx]
     retrieved_docs = "\n".join(top_k_documents)
+    return retrieved_docs
+
+
+def retrieve_all(EMBEDDER, question, db, k_documents=8, k_first=30, e5_flag=False, beta=1.5, alpha=0.1):
+    if e5_flag:
+        query_embedding = EMBEDDER.encode(question, convert_to_tensor=True, normalize_embeddings=True).cpu()
+    else:
+        query_embedding = EMBEDDER.encode(question, convert_to_tensor=True).cpu()
+    scores = cos_sim(query_embedding, db["embeddings"])[0]
+    top_k_idx = torch.topk(scores, k=k_first)[1]
+    scores = scores[top_k_idx]
+    db_tmp = [db["docs"][idx] for idx in top_k_idx]
+
+    if e5_flag:
+        data_tmp = [d[9:] for d in db_tmp]
+        question_tmp = question[7:]
+        lcs_score = calc_lcs(question_tmp, data_tmp, beta)
+    else:
+        lcs_score = calc_lcs(question, db_tmp, beta)
+
+    scores = (scores + alpha * lcs_score)
+
+    top_k_idx = torch.topk(scores, k=k_documents)[1]
+    if e5_flag:
+        top_k_documents = [db_tmp[idx][9:] for idx in top_k_idx]
+    else:
+        top_k_documents = [db_tmp[idx] for idx in top_k_idx]
+    retrieved_docs = "\n".join(top_k_documents)
+    print(top_k_documents)
     return retrieved_docs
