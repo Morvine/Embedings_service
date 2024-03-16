@@ -13,6 +13,7 @@ from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 
 from app.logic.create_emb import create_text, build_index
+from app.logic.retrieve_utils import retrieve
 
 
 load_dotenv()
