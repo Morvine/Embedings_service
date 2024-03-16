@@ -3,7 +3,7 @@ import json
 import os
 import minio
 import pickle
-
+import torch
 from fastapi import FastAPI, Body, status, HTTPException
 from fastapi.responses import JSONResponse
 
