@@ -98,7 +98,7 @@ def retrieve_docs(data=Body()):
     retrieved_docs = retrieve(model, question, data, k_documents=7, e5_flag=E5_FLAG, beta=0.3, alpha=0.1)
     result = {'data': retrieved_docs}
 
-    if result is not None and result['data'] is not None and result['embeddings']:
+    if result is not None and result['data']:
         value_as_bytes = str(result).encode('utf-8')
         res_filename = f'{base_path}/' + str(hashlib.md5(value_as_bytes).hexdigest()) + '.json'
 
